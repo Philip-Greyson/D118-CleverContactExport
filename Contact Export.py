@@ -1,21 +1,29 @@
-#program to export parent/guardian emails for each student. Only prints out if the contact has custody of them, and has an email
-#documentation for the tables
-#https://docs.powerschool.com/PSDD/powerschool-tables/studentcontactassoc-ver12-0-0
-#https://docs.powerschool.com/PSDD/powerschool-tables/studentcontactdetail-ver12-0-0
-#https://docs.powerschool.com/PSDD/powerschool-tables/person-188-ver5-0-0
-#https://docs.powerschool.com/PSDD/powerschool-tables/personemailaddressassoc-ver12-0-0
-#https://docs.powerschool.com/PSDD/powerschool-tables/emailaddress-ver12-0-0
+# Program to export parent/guardian emails for each student. Only prints out if the contact has custody of them, and has an email
+# Then takes the output and uploads it to the Clever SFTP server for their processing
+# documentation for the tables used to get contacts and stuff
+# https://docs.powerschool.com/PSDD/powerschool-tables/studentcontactassoc-ver12-0-0
+# https://docs.powerschool.com/PSDD/powerschool-tables/studentcontactdetail-ver12-0-0
+# https://docs.powerschool.com/PSDD/powerschool-tables/person-188-ver5-0-0
+# https://docs.powerschool.com/PSDD/powerschool-tables/personemailaddressassoc-ver12-0-0
+# https://docs.powerschool.com/PSDD/powerschool-tables/emailaddress-ver12-0-0
 
 # importing module
-import sys
+import pysftp  # used to connect to the Clever sftp site and upload the file
 import os  # needed to get system variables which have the PS IP and password in them
-import oracledb
+import oracledb # needed to connect to the PowerSchool database (oracle database)
 
 un = 'PSNavigator'  # PSNavigator is read only, PS is read/write
 pw = os.environ.get('POWERSCHOOL_DB_PASSWORD') # the password for the PSNavigator account
 cs = os.environ.get('POWERSCHOOL_PROD_DB') # the IP address, port, and database name to connect to
 
+#set up sftp login info, stored as environment variables on system
+sftpUN = os.environ.get('CLEVER_SFTP_USERNAME')
+sftpPW = os.environ.get('CLEVER_SFTP_PASSWORD')
+sftpHOST = os.environ.get('CLEVER_SFTP_ADDRESS')
+cnopts = pysftp.CnOpts(knownhosts='known_hosts') #connection options to use the known_hosts file for key validation
+
 print("Username: " + str(un) + " |Password: " + str(pw) + " |Server: " + str(cs))
+print("SFTP Username: " + str(sftpUN) + " |SFTP Password: " + str(sftpPW) + " |SFTP Server: " + str(sftpHOST)) #debug so we can see what sftp info is being used
 badnames = ['USE', 'TESTSTUDENT', 'TEST STUDENT', 'TESTTT', 'TESTTEST']
 
 # create the connecton to the database
@@ -34,7 +42,7 @@ with oracledb.connect(user=un, password=pw, dsn=cs) as con:
                     firstName = ""
                     lastName = ""
                     relationship = ""
-                    print(student)  # debug
+                    # print(student)  # debug
                     # convert the tuple which is immutable to a list which we can edit. Now entry[] is an array/list of the student data
                     studentEntry = list(student)
                     # check first and last name against array of bad names, only print if both come back not in it
@@ -74,3 +82,13 @@ with oracledb.connect(user=un, password=pw, dsn=cs) as con:
                                 print('"' + contactID + '",' + str(idNum) + ',' + firstName + ',' + lastName + ',Guardian,'+relationship+',,,"'+guardianEmail+'"', file=outputfile)
                 except Exception as er:
                     print('Unknown Error: '+str(er))
+
+with pysftp.Connection(sftpHOST, username=sftpUN, password=sftpPW, cnopts=cnopts) as sftp:
+    print('SFTP connection established')
+    # print(sftp.pwd) # debug, show what folder we connected to
+    # print(sftp.listdir())  # debug, show what other files/folders are in the current directory
+    sftp.chdir('./customcontacts')  # change to the extensionfields folder
+    # print(sftp.pwd) # debug, make sure out changedir worked
+    # print(sftp.listdir())
+    sftp.put('contacts.csv')  # upload the file onto the sftp server
+    print("Contacts file placed on remote server")

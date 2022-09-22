@@ -32,7 +32,7 @@ with oracledb.connect(user=un, password=pw, dsn=cs) as con:
         with open('contacts.csv', 'w') as outputfile:  # open the output file
             print("Connection established: " + con.version)
             print("contact_id,student_id,first_name,last_name,type,relationship,phone,phone_type,email",file=outputfile)  # print out header row
-            cur.execute('SELECT student_number, first_name, last_name, dcid FROM students WHERE enroll_status = 0 ORDER BY student_number DESC')
+            cur.execute('SELECT student_number, first_name, last_name, dcid, id FROM students WHERE enroll_status = 0 ORDER BY student_number DESC')
             studentRows = cur.fetchall()  # store the data from the query into the rows variable
 
             # go through each entry (which is a tuple) in rows. Each entrytuple is a single students's data
@@ -47,10 +47,12 @@ with oracledb.connect(user=un, password=pw, dsn=cs) as con:
                     studentEntry = list(student)
                     # check first and last name against array of bad names, only print if both come back not in it
                     if not str(studentEntry[1]) in badnames and not str(studentEntry[2]) in badnames:
-                        # want to take as int to avoid .0 trails
+                        # want to take as int to avoid .0 trails. student_number is probably no longer needed
                         idNum = int(studentEntry[0])
                         # get the student dcid for use in further queries
                         stuDCID = str(studentEntry[3])
+                        # get the internal student ID number, since clever wants that for some reason
+                        stuID = str(studentEntry[4])
                         #start a query of the contact associations for the student, filtering to only entries that have custodial access
                         cur.execute('SELECT StudentContactAssoc.PersonID, StudentContactDetail.RelationshipTypeCodeSetID FROM StudentContactAssoc LEFT JOIN StudentContactDetail ON StudentContactAssoc.StudentContactAssocID = StudentContactDetail.StudentContactAssocID WHERE StudentContactDetail.IsCustodial = 1 AND StudentContactAssoc.StudentDCID = ' + stuDCID)
                         contactRows = cur.fetchall()
@@ -79,7 +81,7 @@ with oracledb.connect(user=un, password=pw, dsn=cs) as con:
                             #print(guardianEmail) #debug
                             # if there is an actual email for the contact, we will add all their info to the output
                             if guardianEmail != "" and guardianEmail != "N/A":
-                                print('"' + contactID + '",' + str(idNum) + ',' + firstName + ',' + lastName + ',Guardian,'+relationship+',,,"'+guardianEmail+'"', file=outputfile)
+                                print('"' + contactID + '",' + stuID + ',' + firstName + ',' + lastName + ',Guardian,'+relationship+',,,"'+guardianEmail+'"', file=outputfile)
                 except Exception as er:
                     print('Unknown Error: '+str(er))
 

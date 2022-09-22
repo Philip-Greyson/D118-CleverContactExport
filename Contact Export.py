@@ -42,6 +42,8 @@ with oracledb.connect(user=un, password=pw, dsn=cs) as con:
                     firstName = ""
                     lastName = ""
                     relationship = ""
+                    phoneNumber = ""
+                    phoneType = ""
                     # print(student)  # debug
                     # convert the tuple which is immutable to a list which we can edit. Now entry[] is an array/list of the student data
                     studentEntry = list(student)
@@ -74,14 +76,23 @@ with oracledb.connect(user=un, password=pw, dsn=cs) as con:
                                 firstName = str(contactResult[0][0]) if contactResult[0][0] else ""
                                 lastName = str(contactResult[0][1]) if contactResult[0][1] else ""
                             #print(firstName + " " + lastName) #debug
+                            # do a query on the email address table by passing the emailID found by querying the PersonEmailAddressAssoc table with the person ID
                             cur.execute('SELECT EmailAddress.EmailAddress FROM PersonEmailAddressAssoc LEFT JOIN EmailAddress ON PersonEmailAddressAssoc.EmailAddressID = EmailAddress.EmailAddressID WHERE PersonEmailAddressAssoc.PersonID = ' + contactID)
                             emailResult = cur.fetchall()
                             if emailResult:
                                 guardianEmail = str(emailResult[0][0]) if emailResult[0][0] else ""
                             #print(guardianEmail) #debug
+                            # do a similar query on the phone number table as above, but filter to PhoneNumberCodeSetID = 13 to only get mobile phones
+                            cur.execute('SELECT PhoneNumber.PhoneNumber FROM PersonPhoneNumberAssoc LEFT JOIN PhoneNumber ON PersonPhoneNumberAssoc.PhoneNumberID = PhoneNumber.PhoneNumberID WHERE PersonPhoneNumberAssoc.PhoneTypeCodeSetID = 13 AND PersonPhoneNumberAssoc.PersonID = ' + contactID)
+                            phoneResult = cur.fetchall()
+                            if phoneResult:
+                                phoneNumber = str(phoneResult[0][0]) if phoneResult[0][0] else ""
+                                if phoneNumber != "":
+                                    phoneType = "Cell"
+                            # print(phoneNumber) #debug
                             # if there is an actual email for the contact, we will add all their info to the output
                             if guardianEmail != "" and guardianEmail != "N/A":
-                                print('"' + contactID + '",' + stuID + ',' + firstName + ',' + lastName + ',Guardian,'+relationship+',,,"'+guardianEmail+'"', file=outputfile)
+                                print('"' + contactID + '",' + stuID + ',' + firstName + ',' + lastName + ',Guardian,' + relationship + ',' + phoneNumber + ',' + phoneType + ',"' + guardianEmail + '"', file=outputfile)
                 except Exception as er:
                     print('Unknown Error: '+str(er))
 

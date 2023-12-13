@@ -77,36 +77,36 @@ with oracledb.connect(user=un, password=pw, dsn=cs) as con:
                             stuID = str(student[4])
                             print(f'DBUG: Processing student {idNum} - {studentfirstName} {studentlastName}')
                             print(f'DBUG: Processing student {idNum} - {studentfirstName} {studentlastName}', file=log)
-                            #start a query of the contact associations for the student, filtering to only entries that have custodial access
-                            cur.execute('SELECT StudentContactAssoc.PersonID, StudentContactDetail.RelationshipTypeCodeSetID FROM StudentContactAssoc LEFT JOIN StudentContactDetail ON StudentContactAssoc.StudentContactAssocID = StudentContactDetail.StudentContactAssocID WHERE StudentContactDetail.IsCustodial = 1 AND StudentContactAssoc.StudentDCID = ' + stuDCID)
+                            # start a query of the contact associations for the student, filtering to only entries that have custodial access, using bind variables for best practice https://python-oracledb.readthedocs.io/en/latest/user_guide/bind.html#bind
+                            cur.execute('SELECT StudentContactAssoc.PersonID, StudentContactDetail.RelationshipTypeCodeSetID FROM StudentContactAssoc LEFT JOIN StudentContactDetail ON StudentContactAssoc.StudentContactAssocID = StudentContactDetail.StudentContactAssocID WHERE StudentContactDetail.IsCustodial = 1 AND StudentContactAssoc.StudentDCID = :studentDCID', studentDCID=stuDCID)
                             contactRows = cur.fetchall()
                             for contact in contactRows:  # go through each of the contacts that have custodial rights, now we will take their person id to get name and email
-                                try:
+                                try:  # go through each contact row separately in case there is an error we can skip just one contact
                                     # print(contact)  # debug
                                     contactID = str(contact[0])
                                     relationshipCode = str(contact[1])
                                     # take the relationshiptypecodesetid and find the matching display name
-                                    cur.execute('SELECT Code FROM CodeSet WHERE CodeSetID = ' + relationshipCode)
+                                    cur.execute('SELECT Code FROM CodeSet WHERE CodeSetID = :code', code=relationshipCode)
                                     relationshipResult = cur.fetchall()
                                     if relationshipResult:
                                         # store the relationship display name here or blank if no results
                                         relationship = str(relationshipResult[0][0]) if relationshipResult[0][0] else ""
                                     #print(relationship) #debug
                                     # take the contact id and find them in the person table
-                                    cur.execute('SELECT FirstName, LastName FROM Person WHERE ID = ' + contactID)
+                                    cur.execute('SELECT FirstName, LastName FROM Person WHERE ID = :contact', contact=contactID)
                                     contactResult = cur.fetchall()
                                     if contactResult:
                                         contactFirstName = str(contactResult[0][0]) if contactResult[0][0] else ""
                                         contactLastName = str(contactResult[0][1]) if contactResult[0][1] else ""
                                     #print(firstName + " " + lastName) #debug
                                     # do a query on the email address table by passing the emailID found by querying the PersonEmailAddressAssoc table with the person ID
-                                    cur.execute('SELECT EmailAddress.EmailAddress FROM PersonEmailAddressAssoc LEFT JOIN EmailAddress ON PersonEmailAddressAssoc.EmailAddressID = EmailAddress.EmailAddressID WHERE PersonEmailAddressAssoc.PersonID = ' + contactID)
+                                    cur.execute('SELECT EmailAddress.EmailAddress FROM PersonEmailAddressAssoc LEFT JOIN EmailAddress ON PersonEmailAddressAssoc.EmailAddressID = EmailAddress.EmailAddressID WHERE PersonEmailAddressAssoc.PersonID = :contact', contact=contactID)
                                     emailResult = cur.fetchall()
                                     if emailResult:
                                         guardianEmail = str(emailResult[0][0]) if emailResult[0][0] else ""
                                     #print(guardianEmail) #debug
                                     # do a similar query on the phone number table as above, but filter to PhoneNumberCodeSetID = 13 to only get mobile phones
-                                    cur.execute('SELECT PhoneNumber.PhoneNumber FROM PersonPhoneNumberAssoc LEFT JOIN PhoneNumber ON PersonPhoneNumberAssoc.PhoneNumberID = PhoneNumber.PhoneNumberID WHERE PersonPhoneNumberAssoc.PhoneTypeCodeSetID = 13 AND PersonPhoneNumberAssoc.PersonID = ' + contactID)
+                                    cur.execute('SELECT PhoneNumber.PhoneNumber FROM PersonPhoneNumberAssoc LEFT JOIN PhoneNumber ON PersonPhoneNumberAssoc.PhoneNumberID = PhoneNumber.PhoneNumberID WHERE PersonPhoneNumberAssoc.PhoneTypeCodeSetID = 13 AND PersonPhoneNumberAssoc.PersonID = :contact', contact=contactID)
                                     phoneResult = cur.fetchall()
                                     if phoneResult:
                                         phoneNumber = str(phoneResult[0][0]) if phoneResult[0][0] else ""
@@ -114,8 +114,9 @@ with oracledb.connect(user=un, password=pw, dsn=cs) as con:
                                             phoneType = "Cell"
                                     # print(phoneNumber) #debug
                                     # if there is an actual email for the contact, we will add all their info to the output
+                                    print(f'DBUG: Found contact {contactFirstName} {contactLastName} who is {relationship} to student {idNum}, with email {guardianEmail} and phone number {phoneNumber}')
                                     if guardianEmail != "" and guardianEmail != "N/A":
-                                        print('"' + contactID + '",' + stuID + ',' + contactFirstName + ',' + contactLastName + ',Guardian,' + relationship + ',' + phoneNumber + ',' + phoneType + ',"' + guardianEmail + '"', file=outputfile)
+                                        print(f'"{contactID}",{stuID},{contactFirstName},{contactLastName},Guardian,{relationship},{phoneNumber},{phoneType},"{guardianEmail}"', file=outputfile)
                                 except Exception as er:
                                     print(f'ERROR while accessing contact ID {contact[0]} for student {idNum}: {er}')
                                     print(f'ERROR while accessing contact ID {contact[0]} for student {idNum}: {er}', file=log)
